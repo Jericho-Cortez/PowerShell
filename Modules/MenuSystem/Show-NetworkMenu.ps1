@@ -13,9 +13,9 @@ function Show-NetworkMenu {
         Write-Host "  [3] 🔍 Scan de ports" -ForegroundColor White
         Write-Host "  [4] 🚀 Test de vitesse" -ForegroundColor White
         Write-Host "  [5] 🩺 Diagnostic complet" -ForegroundColor White
+	Write-Host "  [6] 🔐 Audit de sécurité" -ForegroundColor White
         Write-Host "  [0] ⬅️  Retour au menu principal" -ForegroundColor Gray
         Write-Host ""
-        
         $choice = Read-Host "Ton choix"
         
         switch ($choice) {
@@ -38,6 +38,10 @@ function Show-NetworkMenu {
             '5' {
                 . "$NetworkPath\Start-NetworkDiagnostic.ps1"
                 Start-NetworkDiagnostic
+            }
+	    '6' {
+                . "$NetworkPath\Start-SecurityAudit.ps1"
+                Start-SecurityAudit
             }
             '0' {
                 return

@@ -12,7 +12,6 @@ function Show-MainMenu {
         Write-Host "  [1] 🛠️ Outils" -ForegroundColor Yellow
         Write-Host "  [2] 🌐 Réseau" -ForegroundColor Green
         Write-Host "  [3] 🎓 Mode École" -ForegroundColor Cyan
-        Write-Host "  [4] 💻 Terminal classique" -ForegroundColor White
         Write-Host "  [0] ❌ Quitter" -ForegroundColor Red
         Write-Host ""
         
@@ -30,11 +29,6 @@ function Show-MainMenu {
             '3' {
                 . "$ModulesPath\Modules\School\Start-SchoolMode.ps1"
                 Start-SchoolMode
-            }
-            '4' {
-                Write-Host "`n💻 Terminal classique activé" -ForegroundColor Green
-                Write-Host "💡 Tape 'exit' pour revenir au menu`n" -ForegroundColor Gray
-                return
             }
             '0' {
                 Write-Host "`n👋 À bientôt Lord Cortez !" -ForegroundColor Cyan
