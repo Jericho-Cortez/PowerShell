@@ -9,12 +9,11 @@ function Show-ToolsMenu {
         Write-Host "╚═══════════════════════════════════════╝" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "  [1] 📱 Générer un QR Code" -ForegroundColor White
-        Write-Host "  [2] 🤖 Ouvrir Perplexity" -ForegroundColor White
-        Write-Host "  [3] 🔍 Rechercher un fichier" -ForegroundColor White
-        Write-Host "  [4] 📱 Afficher mon téléphone" -ForegroundColor White
-        Write-Host "  [5] 🗂️  Trier Downloads" -ForegroundColor White
-        Write-Host "  [6] 📥 Télécharger YouTube" -ForegroundColor White
-        Write-Host "  [0] ⬅️  Retour au menu principal" -ForegroundColor Gray
+        Write-Host "  [2] 🔍 Rechercher un fichier" -ForegroundColor White
+        Write-Host "  [3] 📱 Afficher mon téléphone" -ForegroundColor White
+        Write-Host "  [4] 🗂️ Trier Downloads" -ForegroundColor White
+        Write-Host "  [5] 📥 Télécharger YouTube" -ForegroundColor White
+        Write-Host "  [0] ⬅️ Retour au menu principal" -ForegroundColor Gray
         Write-Host ""
         
         $choice = Read-Host "Ton choix"
@@ -25,22 +24,18 @@ function Show-ToolsMenu {
                 New-QRCodeCustom
             }
             '2' {
-                . "$ToolsPath\Open-Perplexity.ps1"
-                Open-Perplexity
-            }
-            '3' {
                 . "$ToolsPath\Search-Files.ps1"
                 Search-Files
             }
-            '4' {
+            '3' {
                 . "$ToolsPath\Start-PhoneMirror.ps1"
                 Start-PhoneMirror
             }
-            '5' {
+            '4' {
                 . "$ToolsPath\Sort-Downloads.ps1"
                 Sort-Downloads
             }
-            '6' {
+            '5' {
                 . "$ToolsPath\Get-YouTubeVideo.ps1"
                 Get-YouTubeVideo
             }

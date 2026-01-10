@@ -9,7 +9,7 @@ function Show-MainMenu {
         Write-Host "║       MENU PRINCIPAL - TERMINAL       ║" -ForegroundColor Cyan
         Write-Host "╚═══════════════════════════════════════╝" -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "  [1] 🛠️  Outils" -ForegroundColor Yellow
+        Write-Host "  [1] 🛠️ Outils" -ForegroundColor Yellow
         Write-Host "  [2] 🌐 Réseau" -ForegroundColor Green
         Write-Host "  [3] 🎓 Mode École" -ForegroundColor Cyan
         Write-Host "  [4] 💻 Terminal classique" -ForegroundColor White
