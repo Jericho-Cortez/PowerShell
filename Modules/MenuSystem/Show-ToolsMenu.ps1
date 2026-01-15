@@ -13,6 +13,7 @@ function Show-ToolsMenu {
         Write-Host "  [3] 📱 Afficher mon téléphone" -ForegroundColor White
         Write-Host "  [4] 🗂️ Trier Downloads" -ForegroundColor White
         Write-Host "  [5] 📥 Télécharger YouTube" -ForegroundColor White
+        Write-Host "  [6] 📥 .Md -> PDF ou PPTX" -ForegroundColor White
         Write-Host "  [0] ⬅️ Retour au menu principal" -ForegroundColor Gray
         Write-Host ""
         
@@ -38,6 +39,10 @@ function Show-ToolsMenu {
             '5' {
                 . "$ToolsPath\Get-YouTubeVideo.ps1"
                 Get-YouTubeVideo
+            }
+            '6' {
+                . "$ToolsPath\Marp_converter.ps1"
+                Start-MarpInteractive
             }
             '0' {
                 return
