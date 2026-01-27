@@ -325,7 +325,7 @@ function Merge-MarpFiles {
 function Show-MarpHelp {
     Clear-Host
     Write-Host "`n╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║      📊 CONVERTISSEUR OBSIDIAN → SLIDES (Pandoc)           ║" -ForegroundColor Cyan
+    Write-Host "║      📊 CONVERTISSEUR OBSIDIAN → SLIDES (Pandoc)              ║" -ForegroundColor Cyan
     Write-Host "╚═══════════════════════════════════════════════════════════════╝`n" -ForegroundColor Cyan
     Write-Host "✅ Convertit ![[image]] → ![](image) avec retours ligne" -ForegroundColor Gray
     Write-Host "✅ Génère PPTX/PDF/HTML avec images intégrées" -ForegroundColor Gray
