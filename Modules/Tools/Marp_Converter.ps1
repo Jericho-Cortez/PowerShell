@@ -1,7 +1,7 @@
-# ═══════════════════════════════════════════════════════════════════════════
-# 📊 CONVERTISSEUR OBSIDIAN → SLIDES (Marp_converter.ps1)
+# ========================================================================
+# CONVERTISSEUR OBSIDIAN → SLIDES (Marp_converter.ps1)
 # Version 3.0 : Conversion individuelle OU fusion en 1 PPTX
-# ═══════════════════════════════════════════════════════════════════════════
+# ========================================================================
 
 function Marp_converter {
     param(
@@ -13,95 +13,87 @@ function Marp_converter {
         [string]$FormatSortie = "pptx"
     )
 
-    Write-Host "`n🎯 ========== CONVERTISSEUR OBSIDIAN → SLIDES ==========" -ForegroundColor Cyan
-    Write-Host "📂 Dossier source : $DossierSource" -ForegroundColor Gray
-    Write-Host "📊 Format sortie : $($FormatSortie.ToUpper())" -ForegroundColor Gray
+    Write-Host "`nCONVERTISSEUR OBSIDIAN → SLIDES" -ForegroundColor Cyan
+    Write-Host "Dossier source : $DossierSource" -ForegroundColor Gray
+    Write-Host "Format sortie : $($FormatSortie.ToUpper())" -ForegroundColor Gray
 
     if (-not (Test-Path -Path $DossierSource -PathType Container)) {
-        Write-Host "`n❌ Le dossier n'existe pas." -ForegroundColor Red
+        Write-Host "`nERREUR: Le dossier n'existe pas." -ForegroundColor Red
         return
     }
 
-    # Vérifier Pandoc
-    Write-Host "`n🔍 Vérification de Pandoc..." -ForegroundColor Yellow
+    # Verifier Pandoc
+    Write-Host "`nVerification de Pandoc..." -ForegroundColor Yellow
     try {
         $null = pandoc --version 2>$null
-        Write-Host "✅ Pandoc trouvé" -ForegroundColor Green
+        Write-Host "OK Pandoc trouve" -ForegroundColor Green
     }
     catch {
-        Write-Host "❌ Pandoc non installé." -ForegroundColor Red
-        Write-Host "💡 Installation : winget install --id JohnMacFarlane.Pandoc" -ForegroundColor Cyan
+        Write-Host "ERREUR: Pandoc non installe." -ForegroundColor Red
+        Write-Host "Installation : winget install --id JohnMacFarlane.Pandoc" -ForegroundColor Cyan
         return
     }
 
     $fichiersMD = @(Get-ChildItem -Path $DossierSource -Filter "*.md" -Recurse | Sort-Object FullName)
     
     if ($fichiersMD.Count -eq 0) {
-        Write-Host "⚠️  Aucun fichier .md trouvé." -ForegroundColor Yellow
+        Write-Host "Aucun fichier .md trouve." -ForegroundColor Yellow
         return
     }
 
-    Write-Host "📌 Trouvés : $($fichiersMD.Count) fichier(s)" -ForegroundColor Green
+    Write-Host "Trouves : $($fichiersMD.Count) fichier(s)" -ForegroundColor Green
 
-    $stats = @{ Total = $fichiersMD.Count; Réussis = 0; Images = 0 }
+    $stats = @{ Total = $fichiersMD.Count; Reussis = 0; Images = 0 }
 
     foreach ($fichier in $fichiersMD) {
         Write-Host "`n$('=' * 70)" -ForegroundColor Magenta
-        Write-Host "📄 $($fichier.Name)" -ForegroundColor Cyan
+        Write-Host "Fichier: $($fichier.Name)" -ForegroundColor Cyan
 
-        # Créer dossier temp
+        # Creer dossier temp
         $dossierTemp = Join-Path -Path $env:TEMP -ChildPath "marp_temp_$(Get-Random)"
         New-Item -ItemType Directory -Path $dossierTemp -Force | Out-Null
-        Write-Host "   📦 Dossier temp : $dossierTemp" -ForegroundColor Gray
+        Write-Host "   Dossier temp : $dossierTemp" -ForegroundColor Gray
 
-        # ✅ DÉTECTION AMÉLIORÉE DU DOSSIER IMAGES
-        Write-Host "   🔍 Recherche du dossier images..." -ForegroundColor Gray
+        # DETECTION AMELIOREE DU DOSSIER IMAGES
+        Write-Host "   Recherche des images..." -ForegroundColor Gray
         
-        $dossierImages = $null
-        $patterns = @("screen*", "images", "assets", "img", "captures")
+        $imagesFiles = @()
         
-        foreach ($pattern in $patterns) {
-            $trouve = Get-ChildItem -Path $fichier.DirectoryName -Directory -Filter $pattern -ErrorAction SilentlyContinue
-            if ($trouve) {
-                $dossierImages = $trouve | Select-Object -First 1
-                break
-            }
+        # 1. Chercher dans le meme dossier que le .md
+        $imagesFiles += Get-ChildItem -Path $fichier.DirectoryName -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.Extension -match '\.(png|jpg|jpeg|gif|svg|webp)$'
         }
         
-        # Fallback : chercher manuellement
-        if (-not $dossierImages) {
-            $dossierImages = Get-ChildItem -Path $fichier.DirectoryName -Directory | Where-Object { 
-                $_.Name -match 'screen|image|capture|img|asset' 
-            } | Select-Object -First 1
+        # 2. Chercher recursivement dans les sous-dossiers
+        $imagesFiles += Get-ChildItem -Path $fichier.DirectoryName -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
+            $_.Extension -match '\.(png|jpg|jpeg|gif|svg|webp)$'
         }
-
+        
+        # 3. Dédupliquer
+        $imagesFiles = $imagesFiles | Sort-Object FullName -Unique
+        
         # Copier images
         $compteurImages = 0
-        if ($dossierImages) {
-            Write-Host "   📁 Dossier images : $($dossierImages.Name)" -ForegroundColor Green
+        if ($imagesFiles) {
+            Write-Host "   Trouve : $($imagesFiles.Count) image(s)" -ForegroundColor Green
             
-            $imagesFiles = Get-ChildItem -Path $dossierImages.FullName -File | Where-Object {
-                $_.Extension -match '\.(png|jpg|jpeg|gif|svg|webp)$'
+            foreach ($img in $imagesFiles) {
+                Copy-Item -Path $img.FullName -Destination $dossierTemp -Force -ErrorAction SilentlyContinue
+                $compteurImages++
             }
-            
-            if ($imagesFiles) {
-                foreach ($img in $imagesFiles) {
-                    Copy-Item -Path $img.FullName -Destination $dossierTemp -Force
-                    $compteurImages++
-                }
-                Write-Host "   ✅ $compteurImages image(s) copiée(s)" -ForegroundColor Green
-            } else {
-                Write-Host "   ⚠️  Aucune image trouvée dans $($dossierImages.Name)" -ForegroundColor Yellow
-            }
+            Write-Host "   OK $compteurImages image(s) copiees" -ForegroundColor Green
             
             $stats.Images += $compteurImages
         } else {
-            Write-Host "   ⚠️  Aucun dossier d'images trouvé" -ForegroundColor Yellow
+            Write-Host "   Aucune image trouvee" -ForegroundColor Yellow
         }
 
-        # ✅ CONVERSION AVEC RETOURS À LA LIGNE
+        # CONVERSION AVEC RETOURS A LA LIGNE ET CHEMINS ABSOLUS
         $contenu = Get-Content -Path $fichier.FullName -Raw -Encoding UTF8
-        $contenu = $contenu -replace '!\[\[([^\]]+\.(png|jpg|jpeg|gif|svg|webp))\]\]', "`n`n![](`$1)`n`n"
+        
+        # Convertir le chemin en format URL (slashes forward)
+        $dossierTempURL = $dossierTemp -replace '\\', '/'
+        $contenu = $contenu -replace '!\[\[([^\]]+\.(png|jpg|jpeg|gif|svg|webp))\]\]', "`n`n![]($dossierTempURL/`$1)`n`n"
         
         # Sauvegarder
         $fichierTempMD = Join-Path -Path $dossierTemp -ChildPath "$($fichier.BaseName).md"
@@ -110,7 +102,7 @@ function Marp_converter {
         # Fichier de sortie
         $fichierSortie = Join-Path -Path $fichier.DirectoryName -ChildPath "$($fichier.BaseName).$FormatSortie"
 
-        Write-Host "`n🚀 Conversion en $($FormatSortie.ToUpper())..." -ForegroundColor Yellow
+        Write-Host "`nConversion en $($FormatSortie.ToUpper())..." -ForegroundColor Yellow
 
         try {
             Push-Location $dossierTemp
@@ -129,18 +121,18 @@ function Marp_converter {
                 $tailleKB = [math]::Round((Get-Item $fichierSortie).Length / 1KB, 2)
                 
                 if ($tailleKB -gt 100) {
-                    Write-Host "✅ SUCCÈS ! ($tailleKB KB)" -ForegroundColor Green
-                    Write-Host "   📂 $fichierSortie" -ForegroundColor Gray
-                    $stats.Réussis++
+                    Write-Host "OK SUCCES ! ($tailleKB KB)" -ForegroundColor Green
+                    Write-Host "   $fichierSortie" -ForegroundColor Gray
+                    $stats.Reussis++
                 } else {
-                    Write-Host "⚠️  Créé mais sans images ($tailleKB KB)" -ForegroundColor Yellow
+                    Write-Host "WARNING: Cree mais sans images ($tailleKB KB)" -ForegroundColor Yellow
                 }
             } else {
-                Write-Host "❌ Échec de génération" -ForegroundColor Red
+                Write-Host "ERREUR: Echec de generation" -ForegroundColor Red
             }
         }
         catch {
-            Write-Host "❌ Erreur : $_" -ForegroundColor Red
+            Write-Host "ERREUR: $_" -ForegroundColor Red
         }
         finally {
             # Nettoyer
@@ -151,12 +143,12 @@ function Marp_converter {
     }
 
     Write-Host "`n$('=' * 70)" -ForegroundColor Magenta
-    Write-Host "📊 RÉSUMÉ : $($stats.Réussis)/$($stats.Total) fichiers" -ForegroundColor Cyan
-    Write-Host "   🖼️  $($stats.Images) image(s) traitée(s)" -ForegroundColor Gray
-    Write-Host "✨ Terminé !`n" -ForegroundColor Green
+    Write-Host "RESUME : $($stats.Reussis)/$($stats.Total) fichiers" -ForegroundColor Cyan
+    Write-Host "   $($stats.Images) image(s) traitee(s)" -ForegroundColor Gray
+    Write-Host "Termine !`n" -ForegroundColor Green
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ========================================================================
 
 function Merge-MarpFiles {
     param(
@@ -167,23 +159,23 @@ function Merge-MarpFiles {
         [string]$NomFichierFinal = "Presentation_Fusionnee"
     )
 
-    Write-Host "`n🎯 ========== FUSION OBSIDIAN → 1 PPTX ==========" -ForegroundColor Cyan
-    Write-Host "📂 Dossier source : $DossierSource" -ForegroundColor Gray
-    Write-Host "📋 Résultat : $NomFichierFinal.pptx" -ForegroundColor Gray
+    Write-Host "`nFUSION OBSIDIAN → 1 PPTX" -ForegroundColor Cyan
+    Write-Host "Dossier source : $DossierSource" -ForegroundColor Gray
+    Write-Host "Resultat : $NomFichierFinal.pptx" -ForegroundColor Gray
 
     if (-not (Test-Path -Path $DossierSource -PathType Container)) {
-        Write-Host "`n❌ Le dossier n'existe pas." -ForegroundColor Red
+        Write-Host "`nERREUR: Le dossier n'existe pas." -ForegroundColor Red
         return
     }
 
-    # Vérifier Pandoc
-    Write-Host "`n🔍 Vérification de Pandoc..." -ForegroundColor Yellow
+    # Verifier Pandoc
+    Write-Host "`nVerification de Pandoc..." -ForegroundColor Yellow
     try {
         $null = pandoc --version 2>$null
-        Write-Host "✅ Pandoc trouvé" -ForegroundColor Green
+        Write-Host "OK Pandoc trouve" -ForegroundColor Green
     }
     catch {
-        Write-Host "❌ Pandoc non installé." -ForegroundColor Red
+        Write-Host "ERREUR: Pandoc non installe." -ForegroundColor Red
         return
     }
 
@@ -191,76 +183,103 @@ function Merge-MarpFiles {
     $fichiersMD = @(Get-ChildItem -Path $DossierSource -Filter "*.md" -Recurse | Sort-Object FullName)
     
     if ($fichiersMD.Count -eq 0) {
-        Write-Host "⚠️  Aucun fichier .md trouvé." -ForegroundColor Yellow
+        Write-Host "Aucun fichier .md trouve." -ForegroundColor Yellow
         return
     }
 
-    Write-Host "📌 Trouvés : $($fichiersMD.Count) fichier(s)" -ForegroundColor Green
+    Write-Host "Trouves : $($fichiersMD.Count) fichier(s)" -ForegroundColor Green
 
-    # Créer dossier temp
+    # Creer dossier temp
     $dossierTemp = Join-Path -Path $env:TEMP -ChildPath "marp_merge_$(Get-Random)"
     New-Item -ItemType Directory -Path $dossierTemp -Force | Out-Null
-    Write-Host "   📦 Dossier temp : $dossierTemp" -ForegroundColor Gray
+    Write-Host "   Dossier temp : $dossierTemp" -ForegroundColor Gray
 
-    # ✅ ÉTAPE 1 : Copier TOUTES les images dans le temp
-    Write-Host "`n📸 Étape 1 : Copie des images..." -ForegroundColor Yellow
+    # ETAPE 1 : Copier TOUTES les images dans le temp
+    Write-Host "`nEtape 1 : Copie des images..." -ForegroundColor Yellow
     $totalImages = 0
     
-    foreach ($fichier in $fichiersMD) {
-        $cheminDossier = $fichier.DirectoryName
-        
-        # Chercher dossier images
-        $dossierImages = Get-ChildItem -Path $cheminDossier -Directory | Where-Object { 
-            $_.Name -match 'screen|image|capture|img|asset' 
-        } | Select-Object -First 1
-        
-        # Copier images
-        if ($dossierImages) {
-            $imagesFiles = Get-ChildItem -Path $dossierImages.FullName -File | Where-Object {
-                $_.Extension -match '\.(png|jpg|jpeg|gif|svg|webp)$'
-            }
-            
-            if ($imagesFiles) {
-                foreach ($img in $imagesFiles) {
-                    Copy-Item -Path $img.FullName -Destination $dossierTemp -Force
-                    $totalImages++
-                }
-                Write-Host "   ✅ $($fichier.BaseName) : $($imagesFiles.Count) image(s)" -ForegroundColor Green
+    # Recherche GLOBALE de toutes les images dans le dossier source ET tous les sous-dossiers
+    $toutesLesImages = Get-ChildItem -Path $DossierSource -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
+        $_.Extension -match '\.(png|jpg|jpeg|gif|svg|webp)$'
+    }
+    
+    Write-Host "   Recherche globale : $(($toutesLesImages | Measure-Object).Count) fichier(s) image(s)" -ForegroundColor Gray
+    
+    # Copier toutes les images uniques
+    $imagesCopiees = @()
+    if ($toutesLesImages) {
+        foreach ($img in $toutesLesImages) {
+            # Verifier qu'on ne copie pas deux fois le meme fichier
+            if ($imagesCopiees -notcontains $img.Name) {
+                Copy-Item -Path $img.FullName -Destination $dossierTemp -Force -ErrorAction SilentlyContinue
+                $imagesCopiees += $img.Name
+                $totalImages++
             }
         }
     }
     
-    Write-Host "   📊 Total : $totalImages image(s)" -ForegroundColor Green
-
-    # ✅ ÉTAPE 2 : Fusionner tous les .md en UN SEUL
-    Write-Host "`n📋 Étape 2 : Fusion des fichiers .md..." -ForegroundColor Yellow
+    Write-Host "   Copie effectuee : $totalImages image(s)" -ForegroundColor Green
     
-    $contenuFusionné = ""
+    foreach ($fichier in $fichiersMD) {
+        Write-Host "   OK $($fichier.BaseName)" -ForegroundColor Green
+    }
+    
+    Write-Host "   Total : $totalImages image(s)" -ForegroundColor Green
+
+    # ETAPE 2 : Fusionner tous les .md en UN SEUL
+    Write-Host "`nEtape 2 : Fusion des fichiers .md..." -ForegroundColor Yellow
+    
+    $contenuFusionne = ""
     
     foreach ($fichier in $fichiersMD) {
         $contenu = Get-Content -Path $fichier.FullName -Raw -Encoding UTF8
         
-        # ✅ REGEX CORRECTE
-        $contenu = $contenu -replace '!\[\[([^\]]+\.(png|jpg|jpeg|gif|svg|webp))\]\]', "`n`n![](`$1)`n`n"
+        # Simpler: juste convertir ![[nom]] en ![](nom)
+        # puis supprimer les references aux images qui n'existent pas dans le dossier temp
+        $contenu = $contenu -replace '!\[\[([^\]]+)\]\]', '![]($1)'
         
-        # Ajouter un titre pour le fichier + séparateur
+        # Ajouter un titre pour le fichier + separateur
         $titre = $fichier.BaseName
-        $contenuFusionné += "---`n`n"
-        $contenuFusionné += "# $titre`n`n"
-        $contenuFusionné += $contenu
-        $contenuFusionné += "`n`n"
+        $contenuFusionne += "---`n`n"
+        $contenuFusionne += "# $titre`n`n"
+        $contenuFusionne += $contenu
+        $contenuFusionne += "`n`n"
     }
     
-    Write-Host "   ✅ Fusion complétée" -ForegroundColor Green
-
-    # ✅ ÉTAPE 3 : Sauvegarder le fichier fusionné
-    $fichierMDFusionné = Join-Path -Path $dossierTemp -ChildPath "Presentation_Fusionnee.md"
-    $contenuFusionné | Out-File -FilePath $fichierMDFusionné -Encoding UTF8 -NoNewline
-
-    # ✅ ÉTAPE 4 : Convertir en PPTX
-    Write-Host "`n🚀 Étape 3 : Conversion en PPTX..." -ForegroundColor Yellow
+    Write-Host "   OK Fusion completee" -ForegroundColor Green
     
-    # 🔴 CHEMIN COMPLET OBLIGATOIRE
+    # ETAPE 2b : Nettoyer les references aux images cassees
+    Write-Host "   Nettoyage des images manquantes..." -ForegroundColor Yellow
+    
+    # Trouver toutes les references aux images dans le markdown fusionne
+    $imgMatches = [regex]::Matches($contenuFusionne, '!\[\]\(([^\)]+)\)')
+    $compteurNettoyage = 0
+    
+    foreach ($match in $imgMatches) {
+        $nomImg = $match.Groups[1].Value
+        # Extraire le nom du fichier (au cas ou le chemin soit present)
+        $nomFichier = Split-Path -Leaf $nomImg
+        
+        # Verifier si le fichier existe dans le dossier temp
+        if (-not (Test-Path "$dossierTemp\$nomFichier")) {
+            # Fichier n'existe pas, supprimer la reference
+            $contenuFusionne = $contenuFusionne -replace [regex]::Escape($match.Value), ""
+            $compteurNettoyage++
+        }
+    }
+    
+    if ($compteurNettoyage -gt 0) {
+        Write-Host "   Supprime : $compteurNettoyage reference(s) cassee(s)" -ForegroundColor Green
+    }
+
+    # ETAPE 3 : Sauvegarder le fichier fusionne
+    $fichierMDFusionne = Join-Path -Path $dossierTemp -ChildPath "Presentation_Fusionnee.md"
+    $contenuFusionne | Out-File -FilePath $fichierMDFusionne -Encoding UTF8 -NoNewline
+
+    # ETAPE 4 : Convertir en PPTX
+    Write-Host "`nEtape 3 : Conversion en PPTX..." -ForegroundColor Yellow
+    
+    # CHEMIN COMPLET OBLIGATOIRE
     $fichierSortie = Join-Path -Path $DossierSource -ChildPath "$NomFichierFinal.pptx"
     
     Write-Host "   Chemin de sortie : $fichierSortie" -ForegroundColor Gray
@@ -268,34 +287,34 @@ function Merge-MarpFiles {
     Push-Location $dossierTemp
     
     $pandocArgs = @(
-        "$fichierMDFusionné",
+        "$fichierMDFusionne",
         "-o", "$fichierSortie",
         "--slide-level=2"
     )
     
-    Write-Host "   🔄 Lancement Pandoc..." -ForegroundColor Gray
+    Write-Host "   Lancement Pandoc..." -ForegroundColor Gray
     & pandoc $pandocArgs 2>&1 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
     
     Pop-Location
 
-    Write-Host "   ⏳ Vérification du fichier créé..." -ForegroundColor Gray
+    Write-Host "   Verification du fichier cree..." -ForegroundColor Gray
     Start-Sleep -Seconds 1
 
-    # ✅ RÉSULTAT FINAL AVEC VÉRIFICATION
+    # RESULTAT FINAL AVEC VERIFICATION
     if (Test-Path -Path $fichierSortie) {
         $tailleMB = [math]::Round((Get-Item $fichierSortie).Length / 1MB, 2)
         $tailleKB = [math]::Round((Get-Item $fichierSortie).Length / 1KB, 2)
         
         Write-Host "`n$('=' * 70)" -ForegroundColor Magenta
-        Write-Host "✅ SUCCÈS TOTAL !" -ForegroundColor Green
-        Write-Host "`n📊 RÉSUMÉ :" -ForegroundColor Cyan
-        Write-Host "   • Fichiers fusionnés : $($fichiersMD.Count)" -ForegroundColor Gray
-        Write-Host "   • Images intégrées : $totalImages" -ForegroundColor Gray
-        Write-Host "   • Taille PPTX : $tailleMB MB ($tailleKB KB)" -ForegroundColor Gray
+        Write-Host "OK SUCCES TOTAL !" -ForegroundColor Green
+        Write-Host "`nRESUME :" -ForegroundColor Cyan
+        Write-Host "   - Fichiers fusionnes : $($fichiersMD.Count)" -ForegroundColor Gray
+        Write-Host "   - Images integrees : $totalImages" -ForegroundColor Gray
+        Write-Host "   - Taille PPTX : $tailleMB MB ($tailleKB KB)" -ForegroundColor Gray
         
-        Write-Host "`n📂 FICHIER CRÉÉ ICI :" -ForegroundColor Cyan
+        Write-Host "`nFICHIER CREE ICI :" -ForegroundColor Cyan
         Write-Host "   $fichierSortie" -ForegroundColor Yellow
-        Write-Host "`n✨ Ouverture du dossier..." -ForegroundColor Green
+        Write-Host "`nOuverture du dossier..." -ForegroundColor Green
         
         # Ouvrir l'explorateur au bon endroit
         explorer "/select,`"$fichierSortie`""
@@ -304,71 +323,68 @@ function Merge-MarpFiles {
         Write-Host ""
         
     } else {
-        Write-Host "`n❌ ERREUR : Fichier NON créé !" -ForegroundColor Red
+        Write-Host "`nERREUR : Fichier NON cree !" -ForegroundColor Red
         Write-Host "   Chemin attendu : $fichierSortie" -ForegroundColor Yellow
-        Write-Host "   Vérifiez :" -ForegroundColor Gray
-        Write-Host "   • Que Pandoc fonctionne correctement" -ForegroundColor Gray
-        Write-Host "   • L'espace disque disponible" -ForegroundColor Gray
-        Write-Host "   • Les permissions en écriture" -ForegroundColor Gray
+        Write-Host "   Verifiez :" -ForegroundColor Gray
+        Write-Host "   - Que Pandoc fonctionne correctement" -ForegroundColor Gray
+        Write-Host "   - L'espace disque disponible" -ForegroundColor Gray
+        Write-Host "   - Les permissions en ecriture" -ForegroundColor Gray
         Write-Host ""
     }
 
     # Nettoyer
     if (Test-Path $dossierTemp) {
-        Write-Host "🧹 Nettoyage du dossier temp..." -ForegroundColor Gray
+        Write-Host "Nettoyage du dossier temp..." -ForegroundColor Gray
         Remove-Item $dossierTemp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ========================================================================
 
 function Show-MarpHelp {
     Clear-Host
-    Write-Host "`n╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║      📊 CONVERTISSEUR OBSIDIAN → SLIDES (Pandoc)              ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════════════════════════╝`n" -ForegroundColor Cyan
-    Write-Host "✅ Convertit ![[image]] → ![](image) avec retours ligne" -ForegroundColor Gray
-    Write-Host "✅ Génère PPTX/PDF/HTML avec images intégrées" -ForegroundColor Gray
-    Write-Host "✅ Détection auto des dossiers d'images" -ForegroundColor Gray
-    Write-Host "✅ Fusion de plusieurs fichiers en 1 PPTX`n" -ForegroundColor Gray
-    Write-Host "💡 Installation : winget install --id JohnMacFarlane.Pandoc`n" -ForegroundColor Cyan
-    Write-Host "═══════════════════════════════════════════════════════════════`n" -ForegroundColor Cyan
+    Write-Host "`nCONVERTISSEUR OBSIDIAN → SLIDES (Pandoc)" -ForegroundColor Cyan
+    Write-Host "`n- Convertit ![[image]] -> ![](image)" -ForegroundColor Gray
+    Write-Host "- Genere PPTX/PDF/HTML avec images integrees" -ForegroundColor Gray
+    Write-Host "- Detection auto des dossiers d'images" -ForegroundColor Gray
+    Write-Host "- Fusion de plusieurs fichiers en 1 PPTX`n" -ForegroundColor Gray
+    Write-Host "Installation : winget install --id JohnMacFarlane.Pandoc`n" -ForegroundColor Cyan
 }
 
 function Start-MarpInteractive {
     Show-MarpHelp
     
-    Write-Host "📂 Chemin du dossier :" -ForegroundColor Cyan
+    Write-Host "Chemin du dossier :" -ForegroundColor Cyan
     $chemin = Read-Host "  "
     $chemin = $chemin.Trim('"').Trim("'")
     
     if ([string]::IsNullOrWhiteSpace($chemin)) { $chemin = Get-Location }
     
     if (-not (Test-Path $chemin)) {
-        Write-Host "`n❌ Dossier introuvable`n" -ForegroundColor Red
+        Write-Host "`nERREUR: Dossier introuvable`n" -ForegroundColor Red
         Pause
         return
     }
     
-    Write-Host "`n🎯 Choix du mode :" -ForegroundColor Cyan
-    Write-Host "   [1] 📊 Convertir individuellement (1 PPTX par fichier)" -ForegroundColor Gray
-    Write-Host "   [2] 🔗 Fusionner tous les fichiers (1 PPTX unique)" -ForegroundColor Gray
+    Write-Host "`nChoix du mode :" -ForegroundColor Cyan
+    Write-Host "   [1] Convertir individuellement (1 PPTX par fichier)" -ForegroundColor Gray
+    Write-Host "   [2] Fusionner tous les fichiers (1 PPTX unique)" -ForegroundColor Gray
     $choixMode = Read-Host "  Choix"
     
     if ($choixMode -eq "2") {
-        Write-Host "`n📝 Nom du fichier final (défaut: Presentation_Fusionnee) :" -ForegroundColor Cyan
+        Write-Host "`nNom du fichier final (defaut: Presentation_Fusionnee) :" -ForegroundColor Cyan
         $nomFinal = Read-Host "  "
         if ([string]::IsNullOrWhiteSpace($nomFinal)) { $nomFinal = "Presentation_Fusionnee" }
         
         Merge-MarpFiles -DossierSource $chemin -NomFichierFinal $nomFinal
         
-        # ✅ PAUSE APRÈS LA FUSION
+        # PAUSE APRES LA FUSION
         Write-Host ""
-        Write-Host "✨ Appuie sur Entrée pour retourner au menu..." -ForegroundColor Yellow
+        Write-Host "Appuie sur Entree pour retourner au menu..." -ForegroundColor Yellow
         $null = Read-Host
         
     } else {
-        Write-Host "`n📊 Format : [1] PPTX  [2] HTML  [3] PDF" -ForegroundColor Cyan
+        Write-Host "`nFormat : [1] PPTX  [2] HTML  [3] PDF" -ForegroundColor Cyan
         $choix = Read-Host "  Choix"
         
         $format = switch ($choix) {
@@ -379,9 +395,9 @@ function Start-MarpInteractive {
         
         Marp_converter -DossierSource $chemin -FormatSortie $format
         
-        # ✅ PAUSE APRÈS LA CONVERSION
+        # PAUSE APRES LA CONVERSION
         Write-Host ""
-        Write-Host "✨ Appuie sur Entrée pour retourner au menu..." -ForegroundColor Yellow
+        Write-Host "Appuie sur Entree pour retourner au menu..." -ForegroundColor Yellow
         $null = Read-Host
     }
 }
