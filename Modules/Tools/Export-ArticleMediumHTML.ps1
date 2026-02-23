@@ -125,8 +125,8 @@ function Export-ArticleMediumHTML {
             $tempMD,
             "--standalone",
             "-t", "html5",
-            "--quiet"
-            "--metadata", "charset=UTF-8",
+            "--quiet",
+            "--metadata", "charset=UTF-8"
 
         )
         $htmlContent = & pandoc $pandocArgs 2>$null
