@@ -22,15 +22,15 @@ function Marp_converter {
         return
     }
 
-    # Verifier Pandoc
-    Write-Host "`nVerification de Pandoc..." -ForegroundColor Yellow
+    # Verifier Marp
+    Write-Host "`nVerification de Marp CLI..." -ForegroundColor Yellow
     try {
-        $null = pandoc --version 2>$null
-        Write-Host "OK Pandoc trouve" -ForegroundColor Green
+        $null = marp --version 2>$null
+        Write-Host "OK Marp CLI trouve" -ForegroundColor Green
     }
     catch {
-        Write-Host "ERREUR: Pandoc non installe." -ForegroundColor Red
-        Write-Host "Installation : winget install --id JohnMacFarlane.Pandoc" -ForegroundColor Cyan
+        Write-Host "ERREUR: Marp CLI non installe." -ForegroundColor Red
+        Write-Host "Installation : npm install -g @marp-team/marp-cli" -ForegroundColor Cyan
         return
     }
 
@@ -93,11 +93,11 @@ function Marp_converter {
         
         # Convertir le chemin en format URL (slashes forward)
         $dossierTempURL = $dossierTemp -replace '\\', '/'
-        $contenu = $contenu -replace '!\[\[([^\]]+\.(png|jpg|jpeg|gif|svg|webp))\]\]', "`n`n![]($dossierTempURL/`$1)`n`n"
+        $contenu = $contenu -replace '!\[\[([^\]]+\.(png|jpg|jpeg|gif|svg|webp))\]\]', "`n`n![]($dossierTempURL/$1)`n`n"
         
-        # Sauvegarder
+        # Sauvegarder sans BOM (requis par Marp pour parser le frontmatter)
         $fichierTempMD = Join-Path -Path $dossierTemp -ChildPath "$($fichier.BaseName).md"
-        $contenu | Out-File -FilePath $fichierTempMD -Encoding UTF8 -NoNewline
+        [System.IO.File]::WriteAllText($fichierTempMD, $contenu, [System.Text.UTF8Encoding]::new($false))
 
         # Fichier de sortie
         $fichierSortie = Join-Path -Path $fichier.DirectoryName -ChildPath "$($fichier.BaseName).$FormatSortie"
@@ -105,30 +105,37 @@ function Marp_converter {
         Write-Host "`nConversion en $($FormatSortie.ToUpper())..." -ForegroundColor Yellow
 
         try {
-            Push-Location $dossierTemp
-            
-            $pandocArgs = @(
-                "$($fichier.BaseName).md",
-                "-o", $fichierSortie,
-                "--slide-level=2"
-            )
-            
-            & pandoc $pandocArgs 2>&1 | Out-Null
-            
-            Pop-Location
+            # Verifier que le fichier temp existe bien
+            if (-not (Test-Path $fichierTempMD)) {
+                Write-Host "ERREUR: Fichier temp introuvable : $fichierTempMD" -ForegroundColor Red
+                continue
+            }
+
+            # Appel Marp direct (sans tableau pour eviter les problemes de passage d'args)
+            $marpOutput = switch ($FormatSortie) {
+                "pdf"  { & marp $fichierTempMD -o $fichierSortie --pdf  --allow-local-files --no-config 2>&1 }
+                "pptx" { & marp $fichierTempMD -o $fichierSortie --pptx --allow-local-files --no-config 2>&1 }
+                "html" { & marp $fichierTempMD -o $fichierSortie --html --allow-local-files --no-config 2>&1 }
+            }
+
+            $marpErrors = $marpOutput | Where-Object { $_ -match '\[  ERR\]' }
+            if ($marpErrors) {
+                $marpErrors | ForEach-Object { Write-Host "   [MARP] $_" -ForegroundColor Red }
+            }
 
             if (Test-Path -Path $fichierSortie) {
                 $tailleKB = [math]::Round((Get-Item $fichierSortie).Length / 1KB, 2)
                 
-                if ($tailleKB -gt 100) {
+                if ($tailleKB -gt 5) {
                     Write-Host "OK SUCCES ! ($tailleKB KB)" -ForegroundColor Green
                     Write-Host "   $fichierSortie" -ForegroundColor Gray
                     $stats.Reussis++
                 } else {
-                    Write-Host "WARNING: Cree mais sans images ($tailleKB KB)" -ForegroundColor Yellow
+                    Write-Host "WARNING: Fichier suspect ($tailleKB KB) - verifiez le contenu" -ForegroundColor Yellow
                 }
             } else {
                 Write-Host "ERREUR: Echec de generation" -ForegroundColor Red
+                $marpOutput | ForEach-Object { Write-Host "   [MARP] $_" -ForegroundColor DarkRed }
             }
         }
         catch {
@@ -168,14 +175,14 @@ function Merge-MarpFiles {
         return
     }
 
-    # Verifier Pandoc
-    Write-Host "`nVerification de Pandoc..." -ForegroundColor Yellow
+    # Verifier Marp
+    Write-Host "`nVerification de Marp CLI..." -ForegroundColor Yellow
     try {
-        $null = pandoc --version 2>$null
-        Write-Host "OK Pandoc trouve" -ForegroundColor Green
+        $null = marp --version 2>$null
+        Write-Host "OK Marp CLI trouve" -ForegroundColor Green
     }
     catch {
-        Write-Host "ERREUR: Pandoc non installe." -ForegroundColor Red
+        Write-Host "ERREUR: Marp CLI non installe." -ForegroundColor Red
         return
     }
 
@@ -229,14 +236,26 @@ function Merge-MarpFiles {
     # ETAPE 2 : Fusionner tous les .md en UN SEUL
     Write-Host "`nEtape 2 : Fusion des fichiers .md..." -ForegroundColor Yellow
     
+    # Convertir le chemin temp en format URL pour les chemins d'images
+    $dossierTempURL = $dossierTemp -replace '\\', '/'
+    
     $contenuFusionne = ""
     
     foreach ($fichier in $fichiersMD) {
         $contenu = Get-Content -Path $fichier.FullName -Raw -Encoding UTF8
         
-        # Simpler: juste convertir ![[nom]] en ![](nom)
-        # puis supprimer les references aux images qui n'existent pas dans le dossier temp
-        $contenu = $contenu -replace '!\[\[([^\]]+)\]\]', '![]($1)'
+        # DEBUG: Afficher les images trouvees
+        $imagesDetectees = [regex]::Matches($contenu, '!\[\[([^\]]+\.(png|jpg|jpeg|gif|svg|webp))\]\]')
+        if ($imagesDetectees.Count -gt 0) {
+            Write-Host "   DEBUG $($fichier.BaseName) : $($imagesDetectees.Count) image(s) detectee(s)" -ForegroundColor Cyan
+            foreach ($img in $imagesDetectees) {
+                $nomImg = $img.Groups[1].Value
+                Write-Host "      - $nomImg" -ForegroundColor DarkCyan
+            }
+        }
+        
+        # Convertir ![[nom.ext]] en ![](chemin/absolu/nom.ext) avec chemin complet vers dossier temp
+        $contenu = $contenu -replace '!\[\[([^\]]+\.(png|jpg|jpeg|gif|svg|webp))\]\]', "![]($dossierTempURL/`$1)"
         
         # Ajouter un titre pour le fichier + separateur
         $titre = $fichier.BaseName
@@ -274,7 +293,7 @@ function Merge-MarpFiles {
 
     # ETAPE 3 : Sauvegarder le fichier fusionne
     $fichierMDFusionne = Join-Path -Path $dossierTemp -ChildPath "Presentation_Fusionnee.md"
-    $contenuFusionne | Out-File -FilePath $fichierMDFusionne -Encoding UTF8 -NoNewline
+    [System.IO.File]::WriteAllText($fichierMDFusionne, $contenuFusionne, [System.Text.UTF8Encoding]::new($false))
 
     # ETAPE 4 : Convertir en PPTX
     Write-Host "`nEtape 3 : Conversion en PPTX..." -ForegroundColor Yellow
@@ -284,18 +303,8 @@ function Merge-MarpFiles {
     
     Write-Host "   Chemin de sortie : $fichierSortie" -ForegroundColor Gray
     
-    Push-Location $dossierTemp
-    
-    $pandocArgs = @(
-        "$fichierMDFusionne",
-        "-o", "$fichierSortie",
-        "--slide-level=2"
-    )
-    
-    Write-Host "   Lancement Pandoc..." -ForegroundColor Gray
-    & pandoc $pandocArgs 2>&1 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
-    
-    Pop-Location
+    Write-Host "   Lancement Marp..." -ForegroundColor Gray
+    & marp $fichierMDFusionne -o $fichierSortie --pptx --allow-local-files --no-config 2>&1 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
 
     Write-Host "   Verification du fichier cree..." -ForegroundColor Gray
     Start-Sleep -Seconds 1
@@ -343,12 +352,12 @@ function Merge-MarpFiles {
 
 function Show-MarpHelp {
     Clear-Host
-    Write-Host "`nCONVERTISSEUR OBSIDIAN → SLIDES (Pandoc)" -ForegroundColor Cyan
+    Write-Host "`nCONVERTISSEUR OBSIDIAN → SLIDES (Marp CLI)" -ForegroundColor Cyan
     Write-Host "`n- Convertit ![[image]] -> ![](image)" -ForegroundColor Gray
     Write-Host "- Genere PPTX/PDF/HTML avec images integrees" -ForegroundColor Gray
     Write-Host "- Detection auto des dossiers d'images" -ForegroundColor Gray
     Write-Host "- Fusion de plusieurs fichiers en 1 PPTX`n" -ForegroundColor Gray
-    Write-Host "Installation : winget install --id JohnMacFarlane.Pandoc`n" -ForegroundColor Cyan
+    Write-Host "Installation : npm install -g @marp-team/marp-cli`n" -ForegroundColor Cyan
 }
 
 function Start-MarpInteractive {
