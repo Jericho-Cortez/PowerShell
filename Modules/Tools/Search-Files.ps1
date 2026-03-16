@@ -56,9 +56,51 @@ function Search-Files {
         $results = @()
         
         while (-not $recordSet.EOF) {
+            $displayPath = $recordSet.Fields.Item("System.ItemPathDisplay").Value
+            $fileName = $recordSet.Fields.Item("System.ItemName").Value
+            
+            # Premier essai : normaliser les chemins localisés
+            $actualPath = $displayPath -replace 'C:\\Utilisateurs\\', 'C:\Users\' `
+                                      -replace 'C:\\Programmes\\', 'C:\Program Files\' `
+                                      -replace 'C:\\ProgramData\\', 'C:\ProgramData\' `
+                                      -replace '\\Téléchargements\\', '\Downloads\' `
+                                      -replace '\\Documents\\', '\Documents\' `
+                                      -replace '\\Bureau\\', '\Desktop\'
+            
+            # Si le path normalisé n'existe pas, chercher le fichier de manière intelligente
+            $resolvedPath = $actualPath
+            if (-not (Test-Path -LiteralPath $resolvedPath -ErrorAction SilentlyContinue)) {
+                # Essayer de trouver le fichier en cherchant dans les emplacements probables
+                $searchPaths = @(
+                    [System.Environment]::GetFolderPath('UserProfile') + '\Downloads',
+                    [System.Environment]::GetFolderPath('UserProfile') + '\Téléchargements',
+                    [System.Environment]::GetFolderPath('MyDocuments'),
+                    $displayPath.Substring(0, 3) + 'Program Files',
+                    $displayPath.Substring(0, 3) + 'Program Files (x86)',
+                    $displayPath.Substring(0, 3) + 'Programmes'
+                )
+                
+                $found = $false
+                foreach ($searchPath in $searchPaths) {
+                    if (Test-Path $searchPath) {
+                        $searchResult = Get-ChildItem -Path $searchPath -Filter $fileName -ErrorAction SilentlyContinue -Recurse | Select-Object -First 1
+                        if ($searchResult) {
+                            $resolvedPath = $searchResult.FullName
+                            $found = $true
+                            break
+                        }
+                    }
+                }
+                
+                # Si aucun chemin n'a marché, utiliser le path d'affichage original
+                if (-not $found) {
+                    $resolvedPath = $displayPath
+                }
+            }
+            
             $results += [PSCustomObject]@{
-                Name = $recordSet.Fields.Item("System.ItemName").Value
-                Path = $recordSet.Fields.Item("System.ItemPathDisplay").Value
+                Name = $fileName
+                Path = $resolvedPath
                 Size = $recordSet.Fields.Item("System.Size").Value
                 Modified = $recordSet.Fields.Item("System.DateModified").Value
                 Type = $recordSet.Fields.Item("System.ItemType").Value
@@ -140,9 +182,24 @@ function Search-Files {
                     if ($num -match '^\d+$' -and [int]$num -le $results.Count -and [int]$num -gt 0) {
                         $selectedPath = $results[[int]$num - 1].Path
                         
-                        # Ouvrir l'explorateur avec le fichier sélectionné
-                        explorer.exe "/select,`"$selectedPath`""
-                        Write-Host "`n✅ Dossier ouvert avec le fichier sélectionné" -ForegroundColor Green
+                        # Vérifier que le fichier existe
+                        if (Test-Path -LiteralPath $selectedPath) {
+                            try {
+                                # Utiliser Start-Process pour une meilleure gestion des chemins
+                                Start-Process explorer.exe -ArgumentList "/select,`"$selectedPath`"" -ErrorAction Stop
+                                Start-Sleep -Milliseconds 500
+                                Write-Host "`n✅ Dossier ouvert avec le fichier sélectionné" -ForegroundColor Green
+                            }
+                            catch {
+                                Write-Host "`n❌ Erreur lors de l'ouverture : $($_.Exception.Message)" -ForegroundColor Red
+                                Write-Host "💡 Essai avec explorer.exe seul..." -ForegroundColor Yellow
+                                explorer.exe (Split-Path -Parent -LiteralPath $selectedPath)
+                            }
+                        }
+                        else {
+                            Write-Host "`n⚠️  Le fichier n'existe plus à cet emplacement" -ForegroundColor Yellow
+                            Write-Host "Chemin : $selectedPath" -ForegroundColor Gray
+                        }
                     }
                     else {
                         Write-Host "❌ Numéro invalide" -ForegroundColor Red
